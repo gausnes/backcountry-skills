@@ -4,12 +4,12 @@ from common import elev
 
 
 def ray_hit(la, lo, az_deg, el_deg, above=2):
-    # March a ray from (la, lo) at az_deg/el_deg over the DEM; return where it first hits terrain.
     h0 = elev(la, lo) + above
     for d in np.geomspace(50, 40000, 3000):
         pla = la + d * math.cos(math.radians(az_deg)) / 111132
         plo = lo + d * math.sin(math.radians(az_deg)) / (111320 * math.cos(math.radians(la)))
-        if (elev(pla, plo) - h0) * 0.3048 >= d * math.tan(math.radians(el_deg)) - 0.87 * d * d / 12742000:
+        # +0.87*d^2/12742000: earth curvature net of atmospheric refraction (R=6371 km), same term as search.skyline.
+        if (elev(pla, plo) - h0) * 0.3048 >= d * math.tan(math.radians(el_deg)) + 0.87 * d * d / 12742000:
             return pla, plo, elev(pla, plo)
 
 

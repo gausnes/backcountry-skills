@@ -5,8 +5,8 @@ Z, W, N, R = d['z'], float(d['W']), float(d['N']), float(d['res'])
 
 
 def elev(la, lo):
-    i = (N - la) / R
-    j = (lo - W) / R
+    i = min(max((N - la) / R, 0), Z.shape[0] - 1.0001)  # clamp to edge outside the DEM
+    j = min(max((lo - W) / R, 0), Z.shape[1] - 1.0001)
     i0, j0 = int(i), int(j)
     a, b = i - i0, j - j0
     q = Z[i0:i0 + 2, j0:j0 + 2]

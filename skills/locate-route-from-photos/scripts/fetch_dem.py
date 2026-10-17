@@ -17,8 +17,7 @@ def cop_url(lat_sw, lon_sw):
 
 
 def fetch(W, S, E, N, maker, out='dem.npz'):
-    # Reads only the bbox window from remote COG tiles and saves dem.npz (feet).
-    # US: fetch(W, S, E, N, usgs_url); elsewhere: fetch(W, S, E, N, cop_url).
+    # Saves z in feet; source tiles are in meters.
     tiles = [(la, lo) for la in range(math.floor(S), math.floor(N) + 1)
              for lo in range(math.floor(W), math.floor(E) + 1)]
     srcs = [rasterio.open('/vsicurl/' + maker(la, lo)) for la, lo in tiles]
@@ -30,9 +29,7 @@ def fetch(W, S, E, N, maker, out='dem.npz'):
 
 
 def worldcover_url(lat, lon):
-    # ESA WorldCover 10 m tile covering (lat, lon); class 10 = tree cover. Read the bbox
-    # window with rasterio (/vsicurl/), then resample to the DEM grid by fraction:
-    # average (wc == 10) over each DEM cell -> tree_frac in [0, 1].
+    # ESA WorldCover 10 m tile covering (lat, lon); class 10 = tree cover.
     la = math.floor(lat / 3) * 3
     lo = math.floor(lon / 3) * 3
     ns = 'N' if la >= 0 else 'S'

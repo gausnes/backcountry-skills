@@ -34,6 +34,8 @@ from search import skyline, photo_profile, match, AZS, DS          # Step 6
 
 Write the adaptive parts (which source to call, bbox, area hypotheses, route fitting) as a short driver script per run; the modules above never change.
 
+Run every Bash/python call for a given session from the same working directory: `common.py` loads `dem.npz` by a relative path, so it must be the directory Step 2 wrote it to, and nothing pins that across separate tool calls automatically.
+
 ## Step 1: Gather context and form hypotheses
 
 Ask for (or collect): all photos, activity type, distance and vert, loop / out-and-back / point-to-point (shuttle), date and rough time of day, and place hints (account name, caption, home town, tagged location, Strava/Garmin title). Moving time bounds distance and hints at terrain difficulty.
@@ -98,7 +100,7 @@ Treeline is not one number. It drops ~100–150 m per degree of latitude, sits h
 
 **A. From land cover (best).** With `tree_frac` on the DEM grid:
 
-Use `treeline_blocks(Z_ft, tree_frac, res_deg, lat0, ...)` from `scripts/treeline.py`. It buckets the DEM into blocks per aspect sector and finds, top-down, the first elevation bin where forest cover is sustained >=25% for 2 bins. Interpolate the result (per sector) to a TL grid; report median and spread per aspect.
+Use `treeline_blocks(Z_ft, tree_frac, res_deg, lat0, ...)` from `scripts/treeline.py`; interpolate the result (per sector) to a TL grid and report median and spread per aspect.
 
 Also record the **tree limit** (where fraction falls below ~5%, scattered krummholz) above the forest line. Present both: "forest edge ~11,650 ft (N aspects ~11,500, S ~11,800); scattered trees to ~11,900 ft." Ignore blocks whose top barely exceeds the forest (no real treeline there), and mention when ski runs, burns or avalanche paths make a block noisy.
 
@@ -106,7 +108,7 @@ Also record the **tree limit** (where fraction falls below ~5%, scattered krummh
 
 **C. From the photos (always use as a cross-check, and as the fallback).** After a skyline match is verified (Step 7), mark a few points on the forest edge of a distant slope in the photo. For each, turn the pixel into an azimuth and elevation angle with the matched heading/FOV, march that ray over the DEM, and take the elevation where it first hits terrain:
 
-Use `ray_hit(la, lo, az_deg, el_deg)` from `scripts/geometry.py`: it marches a ray from (la, lo) at the given azimuth/elevation angle over the DEM and returns where it first hits terrain.
+Use `ray_hit(la, lo, az_deg, el_deg)` from `scripts/geometry.py`.
 
 The median of those elevations is the treeline that day on those slopes. Also, the photographer's own position (forest edge / krummholz / open tundra) gives a direct check on any candidate camera spot.
 
@@ -129,7 +131,7 @@ From each photo's tree context, set an elevation band relative to the **local** 
 
 ## Step 6: Skyline search
 
-Use `skyline(la, lo)`, `photo_profile(P, Wimg, fov)` and `match(sky, az, el)` from `scripts/search.py` (max elevation angle per azimuth with curvature + refraction; traced pixels -> azimuth/elevation profile for an assumed FOV; best heading by RMS after removing unknown camera tilt).
+Use `skyline(la, lo)`, `photo_profile(P, Wimg, fov)` and `match(sky, az, el)` from `scripts/search.py`.
 
 Grid-search candidate camera spots (start ~300 m spacing over ~40×50 km, inside the treeline band from Step 5), for FOVs 15–80° (phone main camera ≈ 65–70°; zoomed or cropped shots 15–30°). Score = RMS / skyline relief so flat skylines don't win. ~100k evaluations take ~4–5 min; run under `timeout 590`. Refine on a ~70–100 m grid around clusters and along candidate trails. Look for **clusters**, not single winners. For hikes and rides, also score points sampled along the trail network directly.
 
@@ -158,7 +160,7 @@ First mark all verified photo spots on a map and check they can sit on one route
 ### Hiking, scrambling, trail running
 - People stay on trails unless photos show otherwise (talus, cairns, class 3+ ridges). Snap candidate routes to the trail network.
 - Summit or pass photos usually come from the high point; use known summits and saddles as anchor waypoints.
-- Off-trail segments: Dijkstra with Tobler's hiking function as cost (speed = 6·e^(−3.5·|slope+0.05|) km/h), treating >40° as impassable except for scrambles the photos show.
+- Off-trail segments: Dijkstra with Tobler's hiking function as cost — speed = 6·e^(−3.5·|S+0.05|)·0.6 km/h off-path, where S = tan(slope angle) is the dimensionless rise/run gradient (not degrees); treat S > 0.84 (≈40°) as impassable except for scrambles the photos show.
 - Hazards: exposure and scrambling grade, lightning above treeline in summer (give the local treeline), snowfields early season.
 
 ### Mountain biking

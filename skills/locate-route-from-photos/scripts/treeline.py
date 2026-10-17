@@ -8,7 +8,7 @@ def treeline_blocks(Z_ft, tree_frac, res_deg, lat0, block_km=5, bin_ft=50, min_p
     dx = dy * math.cos(math.radians(lat0))
     gy, gx = np.gradient(gaussian_filter(Z_ft * 0.3048, 1), dy, dx)
     slope = np.degrees(np.arctan(np.hypot(gx, gy)))
-    aspect = (np.degrees(np.arctan2(-gx, gy)) + 180) % 360  # downslope-facing direction, 0=N
+    aspect = np.degrees(np.arctan2(-gx, gy)) % 360  # downslope-facing direction, 0=N
     sector = ((aspect + 45) // 90).astype(int) % 4  # 0 N, 1 E, 2 S, 3 W
     ok = (slope > 3) & (slope < 38)  # skip flats (lakes/meadows) and cliffs
     nb = int(block_km * 1000 / dy)
@@ -36,4 +36,4 @@ def treeline_blocks(Z_ft, tree_frac, res_deg, lat0, block_km=5, bin_ft=50, min_p
                         break
                 if not np.isnan(tl) and tl < z.max() - 200:  # block actually reaches above trees
                     out.append((r0 + nb / 2, c0 + nb / 2, s, tl))
-    return out  # interpolate (per sector) to a TL grid; report median and spread per aspect
+    return out

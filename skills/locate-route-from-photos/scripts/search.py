@@ -17,6 +17,7 @@ def skyline(la, lo, above=2):
     i = np.clip(((N - lats) / R).astype(int), 0, Z.shape[0] - 1)
     j = np.clip(((lons - W) / R).astype(int), 0, Z.shape[1] - 1)
     z = np.nan_to_num(Z[i, j], nan=-1e9)
+    # -0.87*DS^2/12742000: earth curvature net of atmospheric refraction (R=6371 km).
     return np.degrees(np.arctan2((z - h0) * 0.3048 - 0.87 * DS ** 2 / 12742000, DS)).max(1)
 
 
@@ -25,7 +26,9 @@ def photo_profile(P, Wimg, fov):
     f = (Wimg / 2) / math.tan(math.radians(fov / 2))
     xs = np.array([p[0] for p in P], float)
     ys = np.array([p[1] for p in P], float)
-    return np.degrees(np.arctan((xs - Wimg / 2) / f)), -np.degrees(np.arctan((ys - ys.mean()) / f))
+    az = np.degrees(np.arctan((xs - Wimg / 2) / f))
+    el = -np.degrees(np.arctan((ys - ys.mean()) / np.hypot(f, xs - Wimg / 2)))
+    return az, el
 
 
 def match(sky, az, el):
