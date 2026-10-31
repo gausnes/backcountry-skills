@@ -1,0 +1,15 @@
+{
+  "name": "backcountry-skills",
+  "owner": {
+    "name": "Luke Ness",
+    "email": "gausnes@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "locate-route-from-photos",
+      "source": "./",
+      "description": "Identify where a ski tour, hike or mountain bike ride happened by matching photo skylines to elevation data, then rebuild the likely route from terrain, treeline, trails, and the trip's distance and vert.",
+      "version": "0.1.0"
+    }
+  ]
+}
