@@ -21,10 +21,17 @@ The method: form area hypotheses from context, fetch a real elevation model (DEM
 
 ## Scripts
 
-`scripts/` holds the deterministic numeric code as importable modules — never retype this math from memory; import it instead:
+`scripts/` holds the deterministic numeric code as importable modules — never retype this math from memory; import it instead.
+
+First, once per session/working directory, source the setup script — it sets `PYTHONPATH`, GDAL's remote-read tuning, and (if the sandbox intercepts TLS at an egress proxy) the CA bundle GDAL needs for `/vsicurl/` reads to work:
+
+```bash
+. "${CLAUDE_SKILL_DIR}/scripts/env.sh"
+```
+
+Then import the modules directly (no `sys.path` fiddling needed, `env.sh` already set `PYTHONPATH`):
 
 ```python
-import sys; sys.path.insert(0, "${CLAUDE_SKILL_DIR}/scripts")
 from fetch_dem import usgs_url, cop_url, worldcover_url, fetch   # Step 2
 from common import elev, peak                                     # Step 3, needs dem.npz in the cwd
 from treeline import treeline_blocks                               # Step 3
@@ -34,7 +41,7 @@ from search import skyline, photo_profile, match, AZS, DS          # Step 6
 
 Write the adaptive parts (which source to call, bbox, area hypotheses, route fitting) as a short driver script per run; the modules above never change.
 
-Run every Bash/python call for a given session from the same working directory: `common.py` loads `dem.npz` by a relative path, so it must be the directory Step 2 wrote it to, and nothing pins that across separate tool calls automatically.
+Run every Bash/python call for a given session from the same working directory: `common.py` loads `dem.npz` by a relative path, so it must be the directory Step 2 wrote it to, and nothing pins that across separate tool calls automatically. Re-source `env.sh` if a new shell/tool call starts in that directory — environment variables don't persist across separate tool invocations either.
 
 ## Step 1: Gather context and form hypotheses
 
@@ -60,9 +67,7 @@ Try these public, no-login sources in order. Only the needed window is read.
 | Copernicus GLO-30 (surface, includes canopy) | Global | `https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_{N|S}{lat:02d}_00_{E|W}{lon:03d}_00_DEM/Copernicus_DSM_COG_10_{N|S}{lat:02d}_00_{E|W}{lon:03d}_00_DEM.tif` — **south-west** corner |
 | SRTM (AWS terrain tiles) | 60°S–60°N | `https://s3.amazonaws.com/elevation-tiles-prod/skadi/N{lat:02d}/N{lat:02d}W{lon:03d}.hgt.gz` — south-west corner |
 
-Use `fetch` from `scripts/fetch_dem.py` (see Scripts above): `fetch(W, S, E, N, usgs_url)` in the US, `fetch(W, S, E, N, cop_url)` elsewhere. It reads only the bbox window from remote COG tiles and saves `dem.npz` (feet).
-
-Set `GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR` and `CPL_VSIL_CURL_ALLOWED_EXTENSIONS=.tif` to keep remote reads fast.
+Use `fetch` from `scripts/fetch_dem.py` (see Scripts above, after sourcing `env.sh`): `fetch(W, S, E, N, usgs_url)` in the US, `fetch(W, S, E, N, cop_url)` elsewhere. It reads only the bbox window from remote COG tiles and saves `dem.npz` (feet). Keep the bbox close to the ~30–40 km hypothesis from Step 1 — each extra degree is another full tile (~50 MB+) merged in.
 
 ### Land cover for treeline
 
@@ -80,13 +85,15 @@ For bikes also fetch US Wilderness (bikes banned): `relation["boundary"="protect
 
 ### If the network blocks these hosts
 
-Test once (connection refused / proxy rejection), don't try other routes, and give the user both options in one message:
-1. **Allow the hosts** so it works automatically from now on: `prd-tnm.s3.amazonaws.com`, `copernicus-dem-30m.s3.amazonaws.com`, `s3.amazonaws.com`, `esa-worldcover.s3.eu-central-1.amazonaws.com`, `overpass-api.de`. On claude.ai this is under Settings → Capabilities (individual paid plans) or Organization settings → Capabilities (Team/Enterprise admins). Then retry.
+Test once (connection refused / proxy rejection / SSL error), don't try other routes, and give the user both options in one message:
+1. **Allow the hosts** so it works automatically from now on: `prd-tnm.s3.amazonaws.com`, `copernicus-dem-30m.s3.amazonaws.com`, `s3.amazonaws.com`, `esa-worldcover.s3.eu-central-1.amazonaws.com`, `overpass-api.de`, plus `pypi.org` and `files.pythonhosted.org` (needed for the `pip install` below). On claude.ai this is under Settings → Capabilities (individual paid plans) or Organization settings → Capabilities (Team/Enterprise admins). Then retry.
+   - If the hosts are allowed but `rasterio.open('/vsicurl/...')` still fails with an SSL/certificate error while plain `curl` to the same URL succeeds, the sandbox is intercepting TLS at an egress proxy and GDAL isn't trusting its CA the way system curl does. `env.sh` (see Scripts) auto-detects a couple of common proxy CA paths; if it still fails, find the proxy's CA bundle path and add it there, or export `GDAL_CURL_CA_BUNDLE`/`CURL_CA_BUNDLE` to it directly.
+   - Trail data (Overpass) is only needed for hikes and rides — don't let it block a ski-tour run; fall back to option 2 below for trails only and keep going.
 2. **Download and attach**: list the exact tile URLs computed above as clickable links (USGS tiles ~50 MB; WorldCover tiles are large, so suggest clipping). If a file is over the upload limit, have them clip it in QGIS (Build Virtual Raster → Clip Raster by Extent, DEFLATE) or with `gdalbuildvrt` + `gdal_translate -projwin W N E S -co COMPRESS=DEFLATE`, using the bbox you give them. For trails: overpass-turbo.eu (Export → GeoJSON), or GPX from Trailforks, MTB Project, AllTrails, CalTopo or Gaia.
 
 USGS US Topo GeoPDFs are a useful extra if the user has them: `pdftotext -layout` for names; `pdftoppm -r 150 -x -y -W -H` for crops; the green tint shows forest. They are not elevation grids.
 
-Install: `pip install --break-system-packages rasterio scipy matplotlib pillow networkx`.
+Install once per session: `pip install --break-system-packages rasterio scipy matplotlib pillow networkx`. A pip warning (e.g. the "running as root" notice) is not failure; verify the actual install with `python3 -c "import rasterio, scipy, networkx"` before relying on it — a silent install-path mismatch is the most common cause of a `ModuleNotFoundError` immediately after a seemingly clean pip run.
 
 ## Step 3: Validate the DEM and compute treeline
 
